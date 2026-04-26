@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Sentinel</title>
+  <meta name="description" content="Project Sentinel — early signal oncology screening workflow" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="desktop-shell">
+    <div class="window-shell">
+      <div class="window-toolbar">
+        <header class="masthead">
+          <h1>Project Sentinel</h1>
+          <p class="lead">Early signal screening workflow for pancreatic risk markers.</p>
+          <p class="runtime" id="runtime-status">Runtime: starting up...</p>
+        </header>
+      </div>
+
+      <nav class="tab-bar" role="tablist" aria-label="Sentinel tabs">
+        <button class="tab active" data-tab="optical" role="tab" aria-selected="true">Scan</button>
+        <button class="tab" data-tab="rna" role="tab" aria-selected="false">Profile</button>
+        <button class="tab" data-tab="vae" role="tab" aria-selected="false">Model</button>
+        <button class="tab" data-tab="clinical" role="tab" aria-selected="false">Protocol</button>
+        <button class="tab" data-tab="inventor" role="tab" aria-selected="false">Inventor</button>
+      </nav>
+
+      <main class="panel-wrap">
+        <section id="optical" class="tab-panel active" role="tabpanel">
+          <h2>Optical Scan</h2>
+          <p class="lead">Capture or upload a clear strip image. Sentinel reads band intensity and runs analysis.</p>
+
+          <div class="camera-stage">
+            <video id="camera-preview" autoplay muted playsinline></video>
+
+            <div class="scan-overlay" id="scan-overlay">
+              <div class="scan-frame"></div>
+              <div class="scan-line"></div>
+            </div>
+
+            <div id="camera-placeholder" class="camera-placeholder hidden">
+              <h3>Camera access is needed to scan.</h3>
+              <p>You can also upload an image below.</p>
+            </div>
+          </div>
+
+          <canvas id="analysis-canvas" class="hidden"></canvas>
+
+          <div class="control-row">
+            <button id="start-camera-btn" class="btn primary">Start Camera</button>
+            <button id="switch-camera-btn" class="btn ghost hidden">Switch Camera</button>
+            <button id="capture-btn" class="btn primary">Capture</button>
+
+            <label class="btn ghost file-btn">
+              Upload Image
+              <input id="upload-input" type="file" accept="image/*" />
+            </label>
+
+            <button id="retake-btn" class="btn ghost hidden">Retake</button>
+            <button id="analyze-btn" class="btn primary hidden">Analyze</button>
+          </div>
+
+          <p class="camera-note" id="camera-note">Ready. Start the camera or upload a file.</p>
+
+          <div id="preview-wrap" class="preview-wrap hidden">
+            <div class="preview-head">
+              <h3>Selected Frame</h3>
+              <span id="resolution">--</span>
+            </div>
+            <img id="captured-preview" alt="Captured Sentinel strip" />
+          </div>
+
+          <div class="status-grid">
+            <article class="status-card">
+              <h3>System Status</h3>
+              <p id="system-standby">Waiting for a scan to generate model features.</p>
+            </article>
+
+            <article class="status-card">
+              <h3>Biomarker Signal</h3>
+              <p id="biomarker-saturation">Awaiting scan...</p>
+            </article>
+          </div>
+
+          <div class="metric-grid">
+            <article class="metric-card">
+              <span>Optical Density</span>
+              <strong id="metric-od">--</strong>
+            </article>
+            <article class="metric-card">
+              <span>Sentinel Score</span>
+              <strong id="metric-score">--</strong>
+            </article>
+            <article class="metric-card">
+              <span>Probability</span>
+              <strong id="metric-prob">--</strong>
+            </article>
+            <article class="metric-card">
+              <span>Inference Source</span>
+              <strong id="metric-source">--</strong>
+            </article>
+          </div>
+        </section>
+
+        <section id="rna" class="tab-panel" role="tabpanel">
+          <h2>Biomarker Profile</h2>
+          <p class="lead">Signal values are transformed into a compact profile for quick clinical interpretation.</p>
+
+          <div class="status-grid">
+            <article class="status-card">
+              <h3>Latent Coordinates</h3>
+              <p id="latent-coordinates">Waiting for scan input.</p>
+            </article>
+
+            <article class="status-card">
+              <h3>5-Gene Signature</h3>
+              <p id="signature-index">Awaiting scan...</p>
+            </article>
+
+            <article class="status-card">
+              <h3>Model Validation</h3>
+              <p id="model-validation">Loading model details...</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="vae" class="tab-panel" role="tabpanel">
+          <h2>Model Details</h2>
+          <p class="lead">The prediction combines optical density, band ratio, strip quality, and separation confidence.</p>
+
+          <div class="status-card single">
+            <h3>Runtime</h3>
+            <p id="vae-runtime">Loading model runtime...</p>
+          </div>
+        </section>
+
+        <section id="clinical" class="tab-panel" role="tabpanel">
+          <h2>Clinical Protocol</h2>
+          <div class="directive-card low" id="directive-card">
+            <p id="clinical-directive">Routine monitoring recommended.</p>
+          </div>
+          <p class="lead" id="clinical-support">Run a scan to generate an updated protocol note.</p>
+        </section>
+
+        <section id="inventor" class="tab-panel" role="tabpanel">
+          <h2>About the Inventor</h2>
+          <h3 class="inventor-name">Sameer Mana</h3>
+          <p class="lead">Student Researcher | 2026 3M Young Scientist Challenge</p>
+
+          <div class="inventor-highlight">
+            <p>
+              Project Sentinel started from one question: what if we could detect pancreatic risk signals before symptoms appear,
+              using tools that are affordable and simple to deploy?
+            </p>
+          </div>
+
+          <div class="status-grid">
+            <article class="status-card">
+              <h3>Base</h3>
+              <p>California, United States</p>
+            </article>
+
+            <article class="status-card">
+              <h3>Focus</h3>
+              <p>Translating high-dimensional biomarker research into a practical, low-cost strip workflow.</p>
+            </article>
+
+            <article class="status-card">
+              <h3>Why This Project</h3>
+              <p>
+                Pancreatic cancer outcomes are often poor because detection is too late. Sentinel is designed to make early signal
+                screening more reachable, with a camera-driven process that supports faster decisions and follow-up.
+              </p>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
