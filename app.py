@@ -38,11 +38,7 @@ def build_embedded_html() -> str:
 
 def main() -> None:
     st.set_page_config(page_title="Project Sentinel", page_icon=":microscope:", layout="wide")
-    st.title("Project Sentinel")
-    st.caption("Camera-driven screening workflow with auto-capture, model inference, and protocol guidance.")
-    st.info(
-        "If camera access is blocked in your browser/iframe policy, use the Upload Image flow in the app."
-    )
+   
 
     components.html(build_embedded_html(), height=2200, scrolling=True)
 
