@@ -40,7 +40,7 @@ def main() -> None:
     st.set_page_config(page_title="Project Sentinel", page_icon=":microscope:", layout="wide")
    
 
-    components.html(build_embedded_html(), height=2200, scrolling=True)
+    
 
 
 if __name__ == "__main__":
