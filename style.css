@@ -64,7 +64,7 @@ body {
 .window-toolbar {
   border-bottom: 1px solid var(--line);
   padding: 24px 28px 20px;
-  background: linear-gradient(180deg, #fdfbf7 0%, #f4efe6 100%);
+  background: var(--surface);
 }
 
 .masthead h1 {
