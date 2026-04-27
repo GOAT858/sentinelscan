@@ -37,7 +37,7 @@ def build_embedded_html() -> str:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Sentinel Scan",icon = "3M", layout="wide")
+    st.set_page_config(page_title="Sentinel Scan", layout="wide")
     components.html(build_embedded_html(), height=1000, scrolling=True)
 
     
