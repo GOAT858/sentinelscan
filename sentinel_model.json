@@ -1,0 +1,207 @@
+{
+  "model_name": "sentinel_logistic_v2",
+  "version": "2.0.0",
+  "trained_at": "2026-04-26T23:56:52Z",
+  "notes": "Metrics measured on held-out validation data from provided CSV. Search mode selects best validation-performing model. Source CSV appears to be a template/demo file; metrics are not suitable for real clinical claims.",
+  "features": [
+    "od",
+    "ratio",
+    "quality",
+    "separation_norm",
+    "dynamic_range"
+  ],
+  "scaler": {
+    "means": [
+      0.5423529411764705,
+      0.678235294117647,
+      0.6929411764705882,
+      0.3317647058823529,
+      0.8488235294117646
+    ],
+    "stds": [
+      0.16017683242922123,
+      0.19872201985806853,
+      0.09432422182837985,
+      0.07828116744447919,
+      0.16476810799352135
+    ]
+  },
+  "coefficients": [
+    1.213658288655794,
+    1.5905277559816542,
+    1.1617386837251695,
+    0.7620095190863823,
+    1.0513711806199546
+  ],
+  "intercept": 1.2858482373030742,
+  "threshold": 0.1,
+  "metrics": {
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "specificity": 1.0,
+    "f1": 1.0,
+    "auc": 1.0
+  },
+  "samples": {
+    "train": 17,
+    "validation": 3
+  },
+  "validation_samples": 3,
+  "target_accuracy": 0.99,
+  "training_config": {
+    "epochs": 900,
+    "lr": 0.04159,
+    "l2": 0.0003666
+  },
+  "search": {
+    "enabled": true,
+    "trials_run": 18,
+    "candidates": [
+      {
+        "epochs": 900,
+        "lr": 0.04159,
+        "l2": 0.0003666,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 1000,
+        "lr": 0.11467,
+        "l2": 1.06e-05,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 1000,
+        "lr": 0.19867,
+        "l2": 9.8e-06,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 1200,
+        "lr": 0.08,
+        "l2": 0.0008,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 1300,
+        "lr": 0.08985,
+        "l2": 0.0002337,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 1500,
+        "lr": 0.08084,
+        "l2": 0.000823,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 1600,
+        "lr": 0.07,
+        "l2": 0.0004,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 1700,
+        "lr": 0.07919,
+        "l2": 0.0009348,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 1800,
+        "lr": 0.08,
+        "l2": 0.0008,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 1900,
+        "lr": 0.06,
+        "l2": 0.0009,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 2200,
+        "lr": 0.05,
+        "l2": 0.0012,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 2200,
+        "lr": 0.14158,
+        "l2": 4.8e-06,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 2300,
+        "lr": 0.05138,
+        "l2": 0.0007605,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 2300,
+        "lr": 0.07146,
+        "l2": 0.0013862,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 2500,
+        "lr": 0.11744,
+        "l2": 0.0016677,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 2600,
+        "lr": 0.04399,
+        "l2": 5.3e-06,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 2600,
+        "lr": 0.18549,
+        "l2": 7.8e-06,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      },
+      {
+        "epochs": 2900,
+        "lr": 0.04427,
+        "l2": 0.000776,
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "auc": 1.0
+      }
+    ]
+  }
+}
