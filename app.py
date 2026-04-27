@@ -37,7 +37,7 @@ def build_embedded_html() -> str:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Project Sentinel", page_icon=":microscope:", layout="wide")
+    st.set_page_config(page_title="Sentinel Scan", layout="wide")
     components.html(build_embedded_html(), height=1000, scrolling=True)
 
     
