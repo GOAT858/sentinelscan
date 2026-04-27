@@ -27,26 +27,25 @@ body {
   font-family: "Avenir Next", "Avenir", "Trebuchet MS", "Segoe UI", sans-serif;
   color: var(--text);
   line-height: 1.5;
-  background:
-    radial-gradient(circle at 15% 0%, rgba(255, 255, 255, 0.48), transparent 42%),
-    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+  background: var(--surface);
+  margin: 0;
+  padding: 0;
 }
 
 .desktop-shell {
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 28px;
+  padding: 0;
+  margin: 0;
 }
 
 .window-shell {
-  width: min(1120px, 100%);
-  border-radius: 18px;
-  border: 1px solid var(--line-strong);
+  width: 100%;
+  min-height: 100vh;
+  border-radius: 0;
+  border: none;
   background: var(--surface);
-  box-shadow: var(--shadow);
-  overflow: hidden;
+  box-shadow: none;
+  overflow: visible;
   animation: settle 420ms ease-out;
 }
 
