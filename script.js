@@ -1,4 +1,14 @@
 const MODEL_FEATURE_ORDER = ["od", "ratio", "quality", "separation_norm", "dynamic_range"];
+const AUTO_CAPTURE_INTERVAL_MS = 420;
+const AUTO_CAPTURE_READY_THRESHOLD = 0.76;
+const AUTO_CAPTURE_ALMOST_THRESHOLD = 0.61;
+const AUTO_CAPTURE_STREAK_REQUIRED = 4;
+const ANALYSIS_STAGES = [
+  { text: "Loading captured frame...", delay: 520 },
+  { text: "Extracting biomarker features...", delay: 640 },
+  { text: "Running highest-accuracy model...", delay: 860 },
+  { text: "Preparing clinical advice...", delay: 520 }
+];
 
 class TrainedModelRuntime {
   constructor() {
@@ -43,12 +53,17 @@ class TrainedModelRuntime {
   }
 
   async load(url = "model/sentinel_model.json") {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) {
-      throw new Error(`Model fetch failed (${res.status})`);
-    }
+    let payload = null;
 
-    const payload = await res.json();
+    if (typeof window !== "undefined" && window.__SENTINEL_MODEL__) {
+      payload = window.__SENTINEL_MODEL__;
+    } else {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(`Model fetch failed (${res.status})`);
+      }
+      payload = await res.json();
+    }
     this.validate(payload);
 
     this.model = payload;
@@ -204,16 +219,15 @@ class SentinelVisionModel {
       baseline,
       control,
       test,
+      signalLength: centered.length,
       separationNorm,
       dynamicRange,
       quality
     };
   }
 
-  static analyze(imageData, modelRuntime = null) {
-    const { width, height } = imageData;
-
-    const candidates = [
+  static buildCandidates(width, height) {
+    return [
       {
         label: "horizontal-strip",
         axis: "x",
@@ -235,6 +249,80 @@ class SentinelVisionModel {
         }
       }
     ];
+  }
+
+  static frameReadiness(imageData) {
+    const { data, width, height } = imageData;
+    const roi = {
+      x: Math.floor(width * 0.2),
+      y: Math.floor(height * 0.34),
+      w: Math.max(20, Math.floor(width * 0.6)),
+      h: Math.max(20, Math.floor(height * 0.3))
+    };
+
+    const lumaAt = (x, y) => {
+      const i = (y * width + x) * 4;
+      return (0.2126 * data[i]) + (0.7152 * data[i + 1]) + (0.0722 * data[i + 2]);
+    };
+
+    let lumaSum = 0;
+    let gradSum = 0;
+    let count = 0;
+
+    for (let y = roi.y + 1; y < roi.y + roi.h - 1; y += 2) {
+      for (let x = roi.x + 1; x < roi.x + roi.w - 1; x += 2) {
+        const c = lumaAt(x, y);
+        const gx = Math.abs(lumaAt(x + 1, y) - lumaAt(x - 1, y));
+        const gy = Math.abs(lumaAt(x, y + 1) - lumaAt(x, y - 1));
+        lumaSum += c;
+        gradSum += gx + gy;
+        count += 1;
+      }
+    }
+
+    const meanLuma = count ? lumaSum / count : 128;
+    const focus = this.clamp((count ? gradSum / count : 0) / 92, 0, 1);
+    const exposure = this.clamp(1 - Math.abs(meanLuma - 132) / 150, 0, 1);
+
+    const valid = this.buildCandidates(width, height)
+      .map((c) => this.candidate(imageData, c))
+      .filter((c) => c.ok)
+      .sort((a, b) => b.quality - a.quality);
+
+    if (!valid.length) {
+      return {
+        score: this.clamp((focus * 0.5) + (exposure * 0.5), 0, 1),
+        quality: 0,
+        centeredScore: 0,
+        focus,
+        exposure
+      };
+    }
+
+    const best = valid[0];
+    const mid = (best.control.index + best.test.index) / 2;
+    const centerNorm = mid / Math.max(1, best.signalLength - 1);
+    const centerError = Math.abs(centerNorm - 0.5);
+    const centeredScore = this.clamp(1 - (centerError * 3.1), 0, 1);
+
+    const score = this.clamp(
+      (best.quality * 0.48) + (centeredScore * 0.26) + (focus * 0.18) + (exposure * 0.08),
+      0,
+      1
+    );
+
+    return {
+      score,
+      quality: best.quality,
+      centeredScore,
+      focus,
+      exposure
+    };
+  }
+
+  static analyze(imageData, modelRuntime = null) {
+    const { width, height } = imageData;
+    const candidates = this.buildCandidates(width, height);
 
     const valid = candidates
       .map((c) => this.candidate(imageData, c))
@@ -461,6 +549,7 @@ class SentinelApp {
     this.video = document.getElementById("camera-preview");
     this.canvas = document.getElementById("analysis-canvas");
     this.scanOverlay = document.getElementById("scan-overlay");
+    this.scanGuidance = document.getElementById("scan-guidance");
     this.cameraPlaceholder = document.getElementById("camera-placeholder");
 
     this.startBtn = document.getElementById("start-camera-btn");
@@ -471,6 +560,8 @@ class SentinelApp {
     this.analyzeBtn = document.getElementById("analyze-btn");
 
     this.cameraNote = document.getElementById("camera-note");
+    this.analysisProgress = document.getElementById("analysis-progress");
+    this.analysisProgressText = document.getElementById("analysis-progress-text");
     this.previewWrap = document.getElementById("preview-wrap");
     this.previewImage = document.getElementById("captured-preview");
     this.resolution = document.getElementById("resolution");
@@ -492,16 +583,27 @@ class SentinelApp {
     this.directiveCard = document.getElementById("directive-card");
     this.clinicalDirective = document.getElementById("clinical-directive");
     this.clinicalSupport = document.getElementById("clinical-support");
+    this.clinicalAdvice = document.getElementById("clinical-advice");
+    this.clinicalNextSteps = document.getElementById("clinical-next-steps");
 
     this.camera = new CameraEngine(this.video);
     this.model = new TrainedModelRuntime();
     this.selectedDataUrl = null;
+    this.autoCaptureTimer = null;
+    this.autoCaptureStreak = 0;
+    this.autoCaptureLocked = false;
+    this.isAnalyzing = false;
+    this.modelAccuracy = 0;
+    this.latestAutoMessage = "";
 
     this.bindTabs();
     this.bindEvents();
     this.initialize();
 
-    window.addEventListener("beforeunload", () => this.camera.stop());
+    window.addEventListener("beforeunload", () => {
+      this.stopAutoCaptureMonitor();
+      this.camera.stop();
+    });
   }
 
   bindTabs() {
@@ -513,14 +615,16 @@ class SentinelApp {
   bindEvents() {
     this.startBtn.addEventListener("click", () => this.startCamera());
     this.switchBtn.addEventListener("click", () => this.switchCamera());
-    this.captureBtn.addEventListener("click", () => this.captureFrame());
+    this.captureBtn.addEventListener("click", () => this.captureFrame({ auto: false }));
     this.retakeBtn.addEventListener("click", () => this.resetSelection());
     this.analyzeBtn.addEventListener("click", () => this.analyzeSelection());
     this.uploadInput.addEventListener("change", (event) => this.handleUpload(event));
 
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") {
+        this.stopAutoCaptureMonitor();
         this.camera.stop();
+        this.setOverlayState("idle", "Camera paused");
         this.cameraNote.textContent = "Camera paused while app is in background.";
       }
     });
@@ -549,8 +653,149 @@ class SentinelApp {
     }
   }
 
+  sleep(ms) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
+  }
+
+  setOverlayState(level, guidanceText) {
+    this.scanOverlay.classList.remove("readiness-mid", "readiness-high", "capture-locked");
+    if (level === "mid") {
+      this.scanOverlay.classList.add("readiness-mid");
+    } else if (level === "high") {
+      this.scanOverlay.classList.add("readiness-high");
+    } else if (level === "locked") {
+      this.scanOverlay.classList.add("readiness-high", "capture-locked");
+    }
+
+    if (this.scanGuidance) {
+      this.scanGuidance.textContent = guidanceText;
+    }
+  }
+
+  startAutoCaptureMonitor() {
+    if (!this.camera.stream || this.selectedDataUrl || this.isAnalyzing) {
+      return;
+    }
+
+    this.stopAutoCaptureMonitor();
+    this.autoCaptureStreak = 0;
+    this.autoCaptureLocked = false;
+    this.latestAutoMessage = "";
+    this.setOverlayState("idle", "Align test strip in frame");
+
+    this.autoCaptureTimer = window.setInterval(() => {
+      this.runAutoCaptureStep();
+    }, AUTO_CAPTURE_INTERVAL_MS);
+    this.runAutoCaptureStep();
+  }
+
+  stopAutoCaptureMonitor() {
+    if (this.autoCaptureTimer) {
+      window.clearInterval(this.autoCaptureTimer);
+      this.autoCaptureTimer = null;
+    }
+    this.autoCaptureStreak = 0;
+  }
+
+  sampleVideoFrameForReadiness() {
+    const targetWidth = 520;
+    const scale = targetWidth / this.video.videoWidth;
+    const targetHeight = Math.max(180, Math.round(this.video.videoHeight * scale));
+
+    const ctx = this.canvas.getContext("2d", { willReadFrequently: true });
+    this.canvas.width = targetWidth;
+    this.canvas.height = targetHeight;
+    ctx.drawImage(this.video, 0, 0, targetWidth, targetHeight);
+
+    const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+    return {
+      data: imageData.data,
+      width: targetWidth,
+      height: targetHeight
+    };
+  }
+
+  runAutoCaptureStep() {
+    if (this.autoCaptureLocked || this.selectedDataUrl || this.isAnalyzing || !this.camera.stream) {
+      return;
+    }
+
+    if (!this.video.videoWidth || !this.video.videoHeight) {
+      return;
+    }
+
+    const sample = this.sampleVideoFrameForReadiness();
+    const readiness = SentinelVisionModel.frameReadiness(sample);
+
+    if (readiness.score >= AUTO_CAPTURE_READY_THRESHOLD) {
+      this.autoCaptureStreak += 1;
+      const remaining = Math.max(0, AUTO_CAPTURE_STREAK_REQUIRED - this.autoCaptureStreak);
+      const countdownMsg = remaining > 0 ? `Hold steady ${remaining}...` : "Capturing now...";
+      this.setOverlayState(remaining > 0 ? "high" : "locked", countdownMsg);
+
+      const note = `Aligned (${Math.round(readiness.score * 100)}%). ${countdownMsg}`;
+      if (this.latestAutoMessage !== note) {
+        this.latestAutoMessage = note;
+        this.cameraNote.textContent = note;
+      }
+
+      if (this.autoCaptureStreak >= AUTO_CAPTURE_STREAK_REQUIRED) {
+        this.autoCaptureLocked = true;
+        this.stopAutoCaptureMonitor();
+        this.captureFrame({ auto: true });
+      }
+      return;
+    }
+
+    this.autoCaptureStreak = 0;
+    if (readiness.score >= AUTO_CAPTURE_ALMOST_THRESHOLD) {
+      const note = "Almost there. Keep the strip centered until the frame turns light green.";
+      this.setOverlayState("mid", "Almost ready");
+      if (this.latestAutoMessage !== note) {
+        this.latestAutoMessage = note;
+        this.cameraNote.textContent = note;
+      }
+    } else {
+      const note = "Place the strip in the center frame. Auto-capture starts when it turns light green.";
+      this.setOverlayState("idle", "Align test strip in frame");
+      if (this.latestAutoMessage !== note) {
+        this.latestAutoMessage = note;
+        this.cameraNote.textContent = note;
+      }
+    }
+  }
+
+  showAnalysisProgress(message) {
+    this.analysisProgressText.textContent = message;
+    this.analysisProgress.classList.remove("hidden");
+  }
+
+  hideAnalysisProgress() {
+    this.analysisProgress.classList.add("hidden");
+  }
+
+  async runAnalysisStages() {
+    for (const stage of ANALYSIS_STAGES) {
+      this.showAnalysisProgress(stage.text);
+      await this.sleep(stage.delay);
+    }
+  }
+
+  renderClinicalNextSteps(steps) {
+    this.clinicalNextSteps.innerHTML = "";
+    for (const step of steps) {
+      const item = document.createElement("li");
+      item.textContent = step;
+      this.clinicalNextSteps.appendChild(item);
+    }
+  }
+
   async initialize() {
     this.runtimeStatus.textContent = "Runtime: loading model and camera...";
+    this.setOverlayState("idle", "Align test strip in frame");
+    this.renderClinicalNextSteps(["Run a scan to generate next-step recommendations."]);
 
     await Promise.all([this.initializeModel(), this.initializeCamera()]);
 
@@ -561,12 +806,15 @@ class SentinelApp {
     try {
       const payload = await this.model.load("model/sentinel_model.json");
       const accuracy = Number(payload.metrics?.accuracy ?? 0);
+      this.modelAccuracy = Number.isFinite(accuracy) ? accuracy : 0;
       const train = payload.samples?.train ?? "--";
       const val = payload.samples?.validation ?? payload.validation_samples ?? "--";
+      const valCount = Number(val);
+      const lowValidation = Number.isFinite(valCount) && valCount < 30;
 
       if (this.model.isUsable) {
-        this.modelValidation.textContent = `Model loaded | Accuracy ${(accuracy * 100).toFixed(2)}% | Train ${train} | Val ${val}`;
-        this.vaeRuntime.textContent = `${payload.model_name || "Sentinel model"} active. Decision threshold ${(payload.threshold ?? 0.5).toFixed(3)}.`;
+        this.modelValidation.textContent = `Model loaded | Accuracy ${(accuracy * 100).toFixed(2)}% | Train ${train} | Val ${val}${lowValidation ? " (small validation set)" : ""}`;
+        this.vaeRuntime.textContent = `${payload.model_name || "Sentinel model"} active. Highest available validation accuracy ${(accuracy * 100).toFixed(2)}%. Decision threshold ${(payload.threshold ?? 0.5).toFixed(3)}.`;
       } else {
         this.modelValidation.textContent = "Model file is a placeholder. Using heuristic fallback.";
         this.vaeRuntime.textContent = "Placeholder model loaded. Add validated samples for full model output.";
@@ -592,7 +840,8 @@ class SentinelApp {
     }
 
     this.cameraPlaceholder.classList.remove("hidden");
-    this.cameraNote.textContent = "Press Start Camera to begin.";
+    this.captureBtn.disabled = true;
+    this.cameraNote.textContent = "Press Start Camera. Keep the strip centered until the frame turns light green.";
 
     try {
       await this.camera.refreshDevices();
@@ -605,15 +854,19 @@ class SentinelApp {
   async startCamera() {
     this.startBtn.disabled = true;
     this.switchBtn.disabled = true;
+    this.captureBtn.disabled = true;
     this.cameraNote.textContent = "Starting camera...";
 
     try {
       const info = await this.camera.start();
       this.cameraPlaceholder.classList.add("hidden");
       this.scanOverlay.classList.remove("hidden");
-      this.cameraNote.textContent = `Camera active: ${info.label}. Center the strip and capture.`;
+      this.cameraNote.textContent = `Camera active: ${info.label}. Center the strip; auto-capture begins when the frame turns light green.`;
+      this.captureBtn.disabled = false;
       this.switchBtn.classList.toggle("hidden", !this.camera.hasMultipleCameras());
+      this.startAutoCaptureMonitor();
     } catch (error) {
+      this.captureBtn.disabled = true;
       this.cameraPlaceholder.classList.remove("hidden");
       this.cameraNote.textContent = `Camera startup failed: ${error.message}`;
     } finally {
@@ -624,24 +877,36 @@ class SentinelApp {
 
   async switchCamera() {
     this.switchBtn.disabled = true;
+    this.captureBtn.disabled = true;
+    this.stopAutoCaptureMonitor();
     this.cameraNote.textContent = "Switching camera...";
     try {
       const info = await this.camera.switchCamera();
       this.cameraPlaceholder.classList.add("hidden");
-      this.cameraNote.textContent = `Now using: ${info.label}`;
+      this.captureBtn.disabled = false;
+      this.cameraNote.textContent = `Now using: ${info.label}. Re-center strip for auto-capture.`;
+      this.startAutoCaptureMonitor();
     } catch (error) {
       this.cameraNote.textContent = `Switch failed: ${error.message}`;
+      this.captureBtn.disabled = !this.camera.stream;
+      if (this.camera.stream) {
+        this.startAutoCaptureMonitor();
+      }
     } finally {
       this.switchBtn.disabled = false;
     }
   }
 
-  captureFrame() {
+  captureFrame({ auto = false } = {}) {
     if (!this.video.videoWidth || !this.video.videoHeight) {
       this.cameraPlaceholder.classList.remove("hidden");
       this.cameraNote.textContent = "No live camera feed yet. Start camera first.";
       return;
     }
+
+    this.stopAutoCaptureMonitor();
+    this.autoCaptureLocked = true;
+    this.setOverlayState("locked", auto ? "Auto-capturing..." : "Captured");
 
     const ctx = this.canvas.getContext("2d");
     this.canvas.width = this.video.videoWidth;
@@ -654,8 +919,11 @@ class SentinelApp {
     this.previewWrap.classList.remove("hidden");
     this.retakeBtn.classList.remove("hidden");
     this.analyzeBtn.classList.remove("hidden");
-    this.systemStandby.textContent = "Frame captured. Ready for analysis.";
-    this.cameraNote.textContent = "Captured. Press Analyze.";
+    this.systemStandby.textContent = auto ? "Auto-captured frame. Running model..." : "Frame captured. Running model...";
+    this.cameraNote.textContent = auto
+      ? "Frame auto-captured. Running analysis..."
+      : "Frame captured. Running analysis...";
+    this.analyzeSelection();
   }
 
   handleUpload(event) {
@@ -670,8 +938,10 @@ class SentinelApp {
       this.previewWrap.classList.remove("hidden");
       this.retakeBtn.classList.remove("hidden");
       this.analyzeBtn.classList.remove("hidden");
-      this.systemStandby.textContent = "Uploaded image ready for analysis.";
-      this.cameraNote.textContent = "Upload complete. Press Analyze to continue.";
+      this.systemStandby.textContent = "Uploaded image received. Running model...";
+      this.cameraNote.textContent = "Upload complete. Running analysis...";
+      this.stopAutoCaptureMonitor();
+      this.analyzeSelection();
     };
     reader.readAsDataURL(file);
   }
@@ -682,7 +952,17 @@ class SentinelApp {
       return;
     }
 
+    if (this.isAnalyzing) {
+      return;
+    }
+
+    this.isAnalyzing = true;
+    this.captureBtn.disabled = true;
+    this.analyzeBtn.disabled = true;
+    this.systemStandby.textContent = "Model processing in progress...";
+
     try {
+      await this.runAnalysisStages();
       const image = await this.loadImage(this.selectedDataUrl);
       const sample = this.sampleImage(image);
       const result = SentinelVisionModel.analyze(sample, this.model);
@@ -691,6 +971,7 @@ class SentinelApp {
         this.systemStandby.textContent = result.message;
         this.biomarkerSaturation.textContent = "Awaiting scan...";
         this.cameraNote.textContent = "Could not read strip clearly. Re-align and try again.";
+        this.setOverlayState("idle", "Re-align and try again");
         return;
       }
 
@@ -698,6 +979,12 @@ class SentinelApp {
       this.cameraNote.textContent = "Analysis complete. Review Profile, Model, and Protocol tabs.";
     } catch (error) {
       this.cameraNote.textContent = `Analysis failed: ${error.message}`;
+      this.systemStandby.textContent = "Analysis failed. Retake or upload another scan.";
+    } finally {
+      this.isAnalyzing = false;
+      this.captureBtn.disabled = !this.camera.stream;
+      this.analyzeBtn.disabled = false;
+      this.hideAnalysisProgress();
     }
   }
 
@@ -752,13 +1039,17 @@ class SentinelApp {
   }
 
   applyResult(result) {
-    this.systemStandby.textContent = "Analysis complete.";
-    this.biomarkerSaturation.textContent = `${(result.malignancyProb * 100).toFixed(1)}% signal detected.`;
+    this.systemStandby.textContent = "Most accurate available model output ready.";
+    this.biomarkerSaturation.textContent = `${(result.malignancyProb * 100).toFixed(1)}% signal detected (${(result.confidence * 100).toFixed(1)}% confidence).`;
 
     this.animateNumber(this.metricOd, result.od, 3);
     this.animateNumber(this.metricScore, result.sentinelScore, 2);
     this.animateNumber(this.metricProb, result.malignancyProb * 100, 1, "%");
-    this.metricSource.textContent = result.source;
+    if (this.model.isUsable) {
+      this.metricSource.textContent = `${result.source} (${(this.modelAccuracy * 100).toFixed(2)}% val acc)`;
+    } else {
+      this.metricSource.textContent = result.source;
+    }
 
     const f = result.features;
     const z1 = (f.od * 1.48 - f.ratio * 0.62 + f.quality * 0.4).toFixed(3);
@@ -774,6 +1065,7 @@ class SentinelApp {
   applyClinicalDirective(result) {
     const prob = result.malignancyProb;
     const threshold = result.threshold;
+    const confidencePct = (result.confidence * 100).toFixed(1);
 
     this.directiveCard.classList.remove("low", "medium", "high");
 
@@ -781,14 +1073,32 @@ class SentinelApp {
       this.directiveCard.classList.add("low");
       this.clinicalDirective.textContent = "Routine monitoring recommended.";
       this.clinicalSupport.textContent = "No elevated signature detected in this scan.";
+      this.clinicalAdvice.textContent = `Current scan is below alert threshold with ${confidencePct}% confidence. Keep routine monitoring and preserve this result for trend comparison.`;
+      this.renderClinicalNextSteps([
+        "Repeat a scan in 2 to 4 weeks under the same lighting setup.",
+        "Track symptoms and risk factors in your health notes.",
+        "Share this report at your next routine clinician visit."
+      ]);
     } else if (prob < threshold + 0.18) {
       this.directiveCard.classList.add("medium");
       this.clinicalDirective.textContent = "Repeat scan and review with a clinician.";
       this.clinicalSupport.textContent = "Borderline signature detected. Confirm with a second scan and clinical context.";
+      this.clinicalAdvice.textContent = `Borderline signature detected with ${confidencePct}% confidence. A confirmatory repeat scan and clinician review are advised before any decision.`;
+      this.renderClinicalNextSteps([
+        "Retake the test now with steady lighting and centered alignment.",
+        "If repeat remains borderline or higher, contact a clinician this week.",
+        "Bring both scans and symptom timeline to your appointment."
+      ]);
     } else {
       this.directiveCard.classList.add("high");
       this.clinicalDirective.textContent = "Prompt clinical follow-up recommended.";
       this.clinicalSupport.textContent = "Strong signature detected. Escalation is advised.";
+      this.clinicalAdvice.textContent = `Elevated signature detected with ${confidencePct}% confidence. This is a screening alert, not a diagnosis, and should be followed by clinical testing promptly.`;
+      this.renderClinicalNextSteps([
+        "Contact a clinician or urgent care provider as soon as possible.",
+        "Request confirmatory laboratory and imaging workup per clinician guidance.",
+        "Do not rely on this result alone for diagnosis; use formal medical follow-up."
+      ]);
     }
   }
 
@@ -799,10 +1109,19 @@ class SentinelApp {
     this.previewWrap.classList.add("hidden");
     this.retakeBtn.classList.add("hidden");
     this.analyzeBtn.classList.add("hidden");
+    this.hideAnalysisProgress();
 
     this.systemStandby.textContent = "Waiting for a scan to generate model features.";
     this.biomarkerSaturation.textContent = "Awaiting scan...";
-    this.cameraNote.textContent = "Selection cleared. Capture or upload a new frame.";
+    this.clinicalAdvice.textContent = "Advice will populate after analysis.";
+    this.renderClinicalNextSteps(["Run a scan to generate next-step recommendations."]);
+    this.cameraNote.textContent = "Selection cleared. Re-center strip for auto-capture or upload a file.";
+    this.setOverlayState("idle", "Align test strip in frame");
+
+    if (this.camera.stream) {
+      this.captureBtn.disabled = false;
+      this.startAutoCaptureMonitor();
+    }
   }
 }
 

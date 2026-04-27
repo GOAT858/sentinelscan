@@ -10,6 +10,7 @@
   --primary: #2d4e66;
   --primary-hover: #243f54;
   --ok: #2f7a46;
+  --ready: #a4efb6;
   --warn: #b47720;
   --danger: #b23a3a;
   --shadow: 0 20px 48px rgba(38, 31, 20, 0.18);
@@ -78,6 +79,19 @@ body {
   margin-bottom: 0;
   color: var(--muted);
   max-width: 74ch;
+}
+
+.scan-instructions {
+  margin-top: 12px;
+  border: 1px solid #d8e8d3;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, #f5fbf2 0%, #eef8eb 100%);
+}
+
+.scan-instructions p {
+  margin-top: 6px;
+  color: #385040;
 }
 
 .runtime {
@@ -182,6 +196,7 @@ h3 {
   display: grid;
   place-items: center;
   pointer-events: none;
+  transition: background-color 180ms ease;
 }
 
 .scan-frame {
@@ -190,6 +205,7 @@ h3 {
   border-radius: 10px;
   border: 2px dashed rgba(255, 255, 255, 0.72);
   box-shadow: 0 0 0 300vmax rgba(0, 0, 0, 0.16);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
 }
 
 .scan-line {
@@ -200,6 +216,55 @@ h3 {
   background: linear-gradient(90deg, transparent 0%, rgba(190, 239, 255, 0.95) 50%, transparent 100%);
   box-shadow: 0 0 18px rgba(141, 221, 255, 0.58);
   animation: scanSweep 2.6s ease-in-out infinite;
+}
+
+.scan-guidance {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(88%, 560px);
+  padding: 7px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  background: rgba(0, 0, 0, 0.42);
+  color: #eef3f1;
+  text-align: center;
+  font-size: 0.85rem;
+  letter-spacing: 0.01em;
+}
+
+.scan-overlay.readiness-mid .scan-frame {
+  border-color: rgba(169, 234, 186, 0.92);
+  background: rgba(76, 124, 86, 0.12);
+}
+
+.scan-overlay.readiness-mid .scan-guidance {
+  border-color: rgba(159, 225, 177, 0.8);
+}
+
+.scan-overlay.readiness-high .scan-frame {
+  border-color: var(--ready);
+  background: rgba(127, 211, 148, 0.16);
+  box-shadow:
+    0 0 0 1px rgba(180, 248, 195, 0.45),
+    0 0 0 300vmax rgba(0, 0, 0, 0.14),
+    0 0 28px rgba(146, 233, 168, 0.46);
+}
+
+.scan-overlay.readiness-high .scan-line {
+  background: linear-gradient(90deg, transparent 0%, rgba(185, 255, 201, 0.94) 50%, transparent 100%);
+  box-shadow: 0 0 20px rgba(136, 247, 164, 0.58);
+}
+
+.scan-overlay.readiness-high .scan-guidance {
+  border-color: rgba(184, 249, 200, 0.84);
+  background: rgba(20, 57, 26, 0.6);
+  color: #ecffee;
+}
+
+.scan-overlay.capture-locked .scan-line {
+  animation-duration: 1.25s;
 }
 
 @keyframes scanSweep {
@@ -281,6 +346,38 @@ h3 {
   margin-top: 10px;
   color: var(--muted);
   font-size: 0.93rem;
+}
+
+.analysis-progress {
+  margin-top: 10px;
+  border: 1px solid #d4d8ce;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #f7f9f2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.analysis-progress p {
+  margin: 0;
+  color: #43513e;
+  font-size: 0.9rem;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(86, 109, 80, 0.25);
+  border-top-color: #4f7656;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .preview-wrap {
@@ -378,6 +475,19 @@ h3 {
 
 .directive-card.high {
   border-left-color: var(--danger);
+}
+
+.clinical-grid {
+  margin-top: 12px;
+}
+
+.next-step-list {
+  margin: 6px 0 0 16px;
+  color: #3f3a32;
+}
+
+.next-step-list li + li {
+  margin-top: 5px;
 }
 
 .inventor-name {

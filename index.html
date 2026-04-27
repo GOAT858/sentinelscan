@@ -30,13 +30,18 @@
         <section id="optical" class="tab-panel active" role="tabpanel">
           <h2>Optical Scan</h2>
           <p class="lead">Capture or upload a clear strip image. Sentinel reads band intensity and runs analysis.</p>
+          <div class="scan-instructions">
+            <h3>Auto Capture Guide</h3>
+            <p>Place the test strip in the center frame. When the frame turns light green, Sentinel auto-captures and begins model analysis.</p>
+          </div>
 
           <div class="camera-stage">
             <video id="camera-preview" autoplay muted playsinline></video>
 
             <div class="scan-overlay" id="scan-overlay">
-              <div class="scan-frame"></div>
+              <div class="scan-frame" id="scan-frame"></div>
               <div class="scan-line"></div>
+              <p class="scan-guidance" id="scan-guidance">Align test strip in frame</p>
             </div>
 
             <div id="camera-placeholder" class="camera-placeholder hidden">
@@ -50,7 +55,7 @@
           <div class="control-row">
             <button id="start-camera-btn" class="btn primary">Start Camera</button>
             <button id="switch-camera-btn" class="btn ghost hidden">Switch Camera</button>
-            <button id="capture-btn" class="btn primary">Capture</button>
+            <button id="capture-btn" class="btn ghost">Capture Now</button>
 
             <label class="btn ghost file-btn">
               Upload Image
@@ -62,6 +67,10 @@
           </div>
 
           <p class="camera-note" id="camera-note">Ready. Start the camera or upload a file.</p>
+          <div id="analysis-progress" class="analysis-progress hidden" role="status" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <p id="analysis-progress-text">Analyzing scan...</p>
+          </div>
 
           <div id="preview-wrap" class="preview-wrap hidden">
             <div class="preview-head">
@@ -141,6 +150,18 @@
             <p id="clinical-directive">Routine monitoring recommended.</p>
           </div>
           <p class="lead" id="clinical-support">Run a scan to generate an updated protocol note.</p>
+          <div class="status-grid clinical-grid">
+            <article class="status-card">
+              <h3>Advice</h3>
+              <p id="clinical-advice">Advice will populate after analysis.</p>
+            </article>
+            <article class="status-card">
+              <h3>Next Steps</h3>
+              <ol id="clinical-next-steps" class="next-step-list">
+                <li>Run a scan to generate next-step recommendations.</li>
+              </ol>
+            </article>
+          </div>
         </section>
 
         <section id="inventor" class="tab-panel" role="tabpanel">
